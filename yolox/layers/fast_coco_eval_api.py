@@ -13,7 +13,6 @@ from pycocotools.cocoeval import COCOeval
 
 from .jit_ops import FastCOCOEvalOp
 
-
 class COCOeval_opt(COCOeval):
     """
     This is a slightly modified version of the original COCO API, where the functions evaluateImg()
