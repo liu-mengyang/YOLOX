@@ -325,6 +325,48 @@ class Exp(BaseExp):
             testdev=testdev,
         )
         return evaluator
+    
+    def get_evaluator_3x3(self, batch_size, is_distributed, testdev=False, legacy=False):
+        from yolox.evaluators import COCOEvaluator3 as COCOEvaluator
+
+        val_loader = self.get_eval_loader(batch_size, is_distributed, testdev, legacy)
+        evaluator = COCOEvaluator(
+            dataloader=val_loader,
+            img_size=self.test_size,
+            confthre=self.test_conf,
+            nmsthre=self.nmsthre,
+            num_classes=self.num_classes,
+            testdev=testdev,
+        )
+        return evaluator
+    
+    def get_evaluator_4x4(self, batch_size, is_distributed, testdev=False, legacy=False):
+        from yolox.evaluators import COCOEvaluator4 as COCOEvaluator
+
+        val_loader = self.get_eval_loader(batch_size, is_distributed, testdev, legacy)
+        evaluator = COCOEvaluator(
+            dataloader=val_loader,
+            img_size=self.test_size,
+            confthre=self.test_conf,
+            nmsthre=self.nmsthre,
+            num_classes=self.num_classes,
+            testdev=testdev,
+        )
+        return evaluator
+    
+    def get_evaluator_5x5(self, batch_size, is_distributed, testdev=False, legacy=False):
+        from yolox.evaluators import COCOEvaluator5 as COCOEvaluator
+
+        val_loader = self.get_eval_loader(batch_size, is_distributed, testdev, legacy)
+        evaluator = COCOEvaluator(
+            dataloader=val_loader,
+            img_size=self.test_size,
+            confthre=self.test_conf,
+            nmsthre=self.nmsthre,
+            num_classes=self.num_classes,
+            testdev=testdev,
+        )
+        return evaluator
 
     def get_trainer(self, args):
         from yolox.core import Trainer

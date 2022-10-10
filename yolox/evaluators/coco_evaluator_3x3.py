@@ -15,10 +15,10 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 import cv2
-
 import numpy as np
 
 import torch
+import torch.nn.functional as F
 
 from yolox.data.datasets import COCO_CLASSES
 from yolox.utils import (
@@ -164,38 +164,196 @@ class COCOEvaluator:
         ):
             with torch.no_grad():
                 imgs = imgs.type(tensor_type)
-
+                height = imgs.shape[2]
+                width = imgs.shape[3]
                 # skip the last iters since batchsize might be not enough for batch inference
                 is_time_record = cur_iter < len(self.dataloader) - 1
                 if is_time_record:
                     start = time.time()
+                
+                r_height = 96-height%96
+                r_width = 96-width%96
+                # print(imgs.shape)
+                imgs = F.pad(imgs, pad=(0, r_width, 0, r_height))
+                # print(imgs.shape)
+                height = imgs.shape[2]
+                width = imgs.shape[3]
+                sub_height = height / 3
+                sub_width = width / 3
+                imgs_sub_11 = imgs[:,:,:int(sub_height),:int(sub_width)]
+                # print(imgs_sub_11.shape)
+                imgs_sub_12 = imgs[:,:,:int(sub_height),int(sub_width):int(sub_width)*2]
+                imgs_sub_13 = imgs[:,:,:int(sub_height),int(sub_width)*2:]
+                imgs_sub_21 = imgs[:,:,int(sub_height):int(sub_height)*2,:int(sub_width)]
+                imgs_sub_22 = imgs[:,:,int(sub_height):int(sub_height)*2,int(sub_width):int(sub_width)*2]
+                imgs_sub_23 = imgs[:,:,int(sub_height):int(sub_height)*2,int(sub_width)*2:]
+                imgs_sub_31 = imgs[:,:,int(sub_height)*2:,:int(sub_width)]
+                imgs_sub_32 = imgs[:,:,int(sub_height)*2:,int(sub_width):int(sub_width)*2]
+                imgs_sub_33 = imgs[:,:,int(sub_height)*2:,int(sub_width)*2:]
 
-                outputs = model(imgs)
+                outputs_sub_11 = model(imgs_sub_11)
+                outputs_sub_12 = model(imgs_sub_12)
+                outputs_sub_13 = model(imgs_sub_13)
+                outputs_sub_21 = model(imgs_sub_21)
+                outputs_sub_22 = model(imgs_sub_22)
+                outputs_sub_23 = model(imgs_sub_23)
+                outputs_sub_31 = model(imgs_sub_31)
+                outputs_sub_32 = model(imgs_sub_32)
+                outputs_sub_33 = model(imgs_sub_33)
+
                 if decoder is not None:
-                    outputs = decoder(outputs, dtype=outputs.type())
+                    outputs_sub_11 = decoder(outputs_sub_11, dtype=outputs_sub_11.type())
+                    outputs_sub_12 = decoder(outputs_sub_12, dtype=outputs_sub_12.type())
+                    outputs_sub_13 = decoder(outputs_sub_13, dtype=outputs_sub_13.type())
+                    outputs_sub_21 = decoder(outputs_sub_21, dtype=outputs_sub_21.type())
+                    outputs_sub_22 = decoder(outputs_sub_22, dtype=outputs_sub_22.type())
+                    outputs_sub_23 = decoder(outputs_sub_23, dtype=outputs_sub_23.type())
+                    outputs_sub_31 = decoder(outputs_sub_31, dtype=outputs_sub_31.type())
+                    outputs_sub_32 = decoder(outputs_sub_32, dtype=outputs_sub_32.type())
+                    outputs_sub_33 = decoder(outputs_sub_33, dtype=outputs_sub_33.type())
 
                 if is_time_record:
                     infer_end = time_synchronized()
                     inference_time += infer_end - start
 
-                outputs = postprocess(
-                    outputs, self.num_classes, self.confthre, self.nmsthre
+                outputs_sub_11 = postprocess(
+                    outputs_sub_11, self.num_classes, self.confthre, self.nmsthre
                 )
+
+                outputs_sub_12 = postprocess(
+                    outputs_sub_12, self.num_classes, self.confthre, self.nmsthre
+                )
+                
+                for i in range(len(outputs_sub_11)):
+                    if outputs_sub_11[i] is not None:
+                        outputs_sub_11[i] = outputs_sub_11[i].cpu()
+                
+                for i in range(len(outputs_sub_12)):
+                    if outputs_sub_12[i] is not None:
+                        outputs_sub_12[i] = outputs_sub_12[i].cpu()
+                        outputs_sub_12[i][:, 0] += sub_width
+                        outputs_sub_12[i][:, 2] += sub_width
+                        
+                        if outputs_sub_11[i] is not None:
+                            outputs_sub_11[i] = torch.cat((outputs_sub_11[i],outputs_sub_12[i]),0)
+                        else:
+                            outputs_sub_11[i] = outputs_sub_12[i]
+                outputs_sub_13 = postprocess(
+                    outputs_sub_13, self.num_classes, self.confthre, self.nmsthre
+                )
+                for i in range(len(outputs_sub_13)):
+                    if outputs_sub_13[i] is not None:
+                        outputs_sub_13[i] = outputs_sub_13[i].cpu()
+                        outputs_sub_13[i][:, 0] += sub_width*2
+                        outputs_sub_13[i][:, 2] += sub_width*2
+                        
+                        if outputs_sub_11[i] is not None:
+                            outputs_sub_11[i] = torch.cat((outputs_sub_11[i],outputs_sub_13[i]),0)
+                        else:
+                            outputs_sub_11[i] = outputs_sub_13[i]
+                outputs_sub_21 = postprocess(
+                    outputs_sub_21, self.num_classes, self.confthre, self.nmsthre
+                )
+                for i in range(len(outputs_sub_21)):
+                    if outputs_sub_21[i] is not None:
+                        outputs_sub_21[i] = outputs_sub_21[i].cpu()
+                        outputs_sub_21[i][:, 1] += sub_height
+                        outputs_sub_21[i][:, 3] += sub_height
+                        
+                        if outputs_sub_11[i] is not None:
+                            outputs_sub_11[i] = torch.cat((outputs_sub_11[i],outputs_sub_21[i]),0)
+                        else:
+                            outputs_sub_11[i] = outputs_sub_21[i]
+                outputs_sub_22 = postprocess(
+                    outputs_sub_22, self.num_classes, self.confthre, self.nmsthre
+                )
+                for i in range(len(outputs_sub_22)):
+                    if outputs_sub_22[i] is not None:
+                        outputs_sub_22[i] = outputs_sub_22[i].cpu()
+                        outputs_sub_22[i][:, 0] += sub_width
+                        outputs_sub_22[i][:, 1] += sub_height
+                        outputs_sub_22[i][:, 2] += sub_width
+                        outputs_sub_22[i][:, 3] += sub_height
+                        
+                        if outputs_sub_11[i] is not None:
+                            outputs_sub_11[i] = torch.cat((outputs_sub_11[i], outputs_sub_22[i]),0)
+                        else:
+                            outputs_sub_11[i] = outputs_sub_22[i]
+                outputs_sub_23 = postprocess(
+                    outputs_sub_23, self.num_classes, self.confthre, self.nmsthre
+                )
+                for i in range(len(outputs_sub_23)):
+                    if outputs_sub_23[i] is not None:
+                        outputs_sub_23[i] = outputs_sub_23[i].cpu()
+                        outputs_sub_23[i][:, 0] += sub_width*2
+                        outputs_sub_23[i][:, 1] += sub_height
+                        outputs_sub_23[i][:, 2] += sub_width*2
+                        outputs_sub_23[i][:, 3] += sub_height
+                        
+                        if outputs_sub_11[i] is not None:
+                            outputs_sub_11[i] = torch.cat((outputs_sub_11[i], outputs_sub_23[i]),0)
+                        else:
+                            outputs_sub_11[i] = outputs_sub_23[i]
+                outputs_sub_31 = postprocess(
+                    outputs_sub_31, self.num_classes, self.confthre, self.nmsthre
+                )
+                for i in range(len(outputs_sub_31)):
+                    if outputs_sub_31[i] is not None:
+                        outputs_sub_31[i] = outputs_sub_31[i].cpu()
+                        outputs_sub_31[i][:, 1] += sub_height*2
+                        outputs_sub_31[i][:, 3] += sub_height*2
+                        
+                        if outputs_sub_11[i] is not None:
+                            outputs_sub_11[i] = torch.cat((outputs_sub_11[i],outputs_sub_31[i]),0)
+                        else:
+                            outputs_sub_11[i] = outputs_sub_31[i]
+                outputs_sub_32 = postprocess(
+                    outputs_sub_32, self.num_classes, self.confthre, self.nmsthre
+                )
+                for i in range(len(outputs_sub_32)):
+                    if outputs_sub_32[i] is not None:
+                        outputs_sub_32[i] = outputs_sub_32[i].cpu()
+                        outputs_sub_32[i][:, 0] += sub_width
+                        outputs_sub_32[i][:, 1] += sub_height*2
+                        outputs_sub_32[i][:, 2] += sub_width
+                        outputs_sub_32[i][:, 3] += sub_height*2
+                        
+                        if outputs_sub_11[i] is not None:
+                            outputs_sub_11[i] = torch.cat((outputs_sub_11[i], outputs_sub_32[i]),0)
+                        else:
+                            outputs_sub_11[i] = outputs_sub_32[i]
+                outputs_sub_33 = postprocess(
+                    outputs_sub_33, self.num_classes, self.confthre, self.nmsthre
+                )
+                for i in range(len(outputs_sub_33)):
+                    if outputs_sub_33[i] is not None:
+                        outputs_sub_33[i] = outputs_sub_33[i].cpu()
+                        outputs_sub_33[i][:, 0] += sub_width*2
+                        outputs_sub_33[i][:, 1] += sub_height*2
+                        outputs_sub_33[i][:, 2] += sub_width*2
+                        outputs_sub_33[i][:, 3] += sub_height*2
+                        
+                        if outputs_sub_11[i] is not None:
+                            outputs_sub_11[i] = torch.cat((outputs_sub_11[i], outputs_sub_33[i]),0)
+                        else:
+                            outputs_sub_11[i] = outputs_sub_33[i]
+                
                 if is_time_record:
                     nms_end = time_synchronized()
                     nms_time += nms_end - infer_end
-                    
+            
             # test visualization
-            bboxes_sub_11 = outputs[0][:, 0:4]
-            cls_sub_11 = outputs[0][:, 6]
-            scores_sub_11 = outputs[0][:, 4] * outputs[0][:, 5]
+            bboxes_sub_11 = outputs_sub_11[0][:, 0:4]
+            cls_sub_11 = outputs_sub_11[0][:, 6]
+            scores_sub_11 = outputs_sub_11[0][:, 4] * outputs_sub_11[0][:, 5]
             cls_name = COCO_CLASSES
             vis_res_full = vis(cv2.cvtColor(np.transpose(np.array(imgs[0].cpu())/255, (1,2,0)), cv2.COLOR_RGB2BGR), bboxes_sub_11, scores_sub_11, cls_sub_11, conf=0.35, class_names=cls_name)
             plt.imshow(vis_res_full[:,:,::])
             plt.show()
 
+            
             data_list_elem, image_wise_data = self.convert_to_coco_format(
-                outputs, info_imgs, ids, return_outputs=True)
+                outputs_sub_11, info_imgs, ids, return_outputs=True)
             data_list.extend(data_list_elem)
             output_data.update(image_wise_data)
 
